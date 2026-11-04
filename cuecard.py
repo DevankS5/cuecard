@@ -228,6 +228,10 @@ class App:
 
 
 def main():
+    if os.name == "nt":  # without this, Windows bitmap-scales the window and text looks blurry
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
     root = tk.Tk()
     App(root)
     root.mainloop()
