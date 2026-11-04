@@ -4,6 +4,7 @@ import os
 import queue
 import threading
 import tkinter as tk
+import urllib.error
 import urllib.request
 from tkinter import ttk
 
@@ -162,6 +163,10 @@ class App:
         def run():
             try:
                 work()
+            except urllib.error.HTTPError as e:  # e.g. 404 when the model was never pulled
+                self.events.put(("error", e.read().decode(errors="replace")))
+            except urllib.error.URLError:
+                self.events.put(("error", f"can't reach Ollama at {OLLAMA_URL}. Is it running?"))
             except Exception as e:  # surface any failure in the window instead of a dead thread
                 self.events.put(("error", str(e)))
 
