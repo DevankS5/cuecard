@@ -55,33 +55,47 @@ class Recorder:
 
 
 _whisper = None
+_whisper_lock = threading.Lock()  # one whisper.cpp context, used by one thread at a time
 
 
 def transcribe(audio):
     """Turn 16 kHz mono float32 audio into text. Loads the model on first use."""
     global _whisper
-    if _whisper is None:
-        from pywhispercpp.model import Model
+    with _whisper_lock:
+        if _whisper is None:
+            from pywhispercpp.model import Model
 
-        _whisper = Model(WHISPER_MODEL, print_progress=False, print_realtime=False)
-    text = " ".join(seg.text.strip() for seg in _whisper.transcribe(audio)).strip()
+            _whisper = Model(WHISPER_MODEL, print_progress=False, print_realtime=False)
+        segments = _whisper.transcribe(audio)
+    text = " ".join(seg.text.strip() for seg in segments).strip()
     return "" if text == "[BLANK_AUDIO]" else text
+
+
+def _post(path, payload):
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}{path}", data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    return urllib.request.urlopen(req)
+
+
+def warm_up():
+    """Load both models before the first click. A cold Ollama load can take over a minute."""
+    _post("/api/generate", {"model": LLM_MODEL, "keep_alive": "30m"}).close()
+    transcribe(np.zeros(SAMPLE_RATE, dtype=np.float32))
 
 
 def stream_answer(question):
     """Yield answer text piece by piece from the local Ollama server."""
-    body = json.dumps({
+    with _post("/api/chat", {
         "model": LLM_MODEL,
         "stream": True,
+        "keep_alive": "30m",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
         ],
-    }).encode()
-    req = urllib.request.Request(
-        f"{OLLAMA_URL}/api/chat", data=body, headers={"Content-Type": "application/json"}
-    )
-    with urllib.request.urlopen(req) as resp:
+    }) as resp:
         yield from parse_chunks(resp)
 
 
@@ -131,6 +145,8 @@ class App:
 
         self._set_buttons(start=True, stop=False, suggest=True)
         root.after(50, self._drain_events)
+        self.status.config(text="Loading models...")
+        self._in_background(lambda: (warm_up(), self.events.put(("status", "Ready. Press Start."))))
 
     def _set_buttons(self, start, stop, suggest):
         for btn, on in ((self.start_btn, start), (self.stop_btn, stop), (self.suggest_btn, suggest)):
