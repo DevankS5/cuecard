@@ -114,7 +114,8 @@ class App:
         bar.pack(fill="x")
         self.start_btn = ttk.Button(bar, text="Start", command=self.start)
         self.stop_btn = ttk.Button(bar, text="Stop", command=self.stop)
-        for btn in (self.start_btn, self.stop_btn):
+        self.suggest_btn = ttk.Button(bar, text="Suggest Answer", command=self.suggest)
+        for btn in (self.start_btn, self.stop_btn, self.suggest_btn):
             btn.pack(side="left", padx=(0, 6))
         self.status = ttk.Label(bar, text="Press Start and ask a question.", foreground="#555")
         self.status.pack(side="right")
@@ -123,12 +124,23 @@ class App:
         self.question = tk.Text(root, height=5, wrap="word", font=("Segoe UI", 11), padx=8, pady=6)
         self.question.pack(fill="x", padx=12, pady=(2, 10))
 
-        self._set_buttons(start=True, stop=False)
+        ttk.Label(root, text=f"Suggested answer ({LLM_MODEL})").pack(anchor="w", padx=12)
+        self.answer = tk.Text(root, wrap="word", font=("Segoe UI", 11), padx=8, pady=6,
+                              state="disabled", background="#f7f7f5")
+        self.answer.pack(fill="both", expand=True, padx=12, pady=(2, 12))
+
+        self._set_buttons(start=True, stop=False, suggest=True)
         root.after(50, self._drain_events)
 
-    def _set_buttons(self, start, stop):
-        self.start_btn.state(["!disabled"] if start else ["disabled"])
-        self.stop_btn.state(["!disabled"] if stop else ["disabled"])
+    def _set_buttons(self, start, stop, suggest):
+        for btn, on in ((self.start_btn, start), (self.stop_btn, stop), (self.suggest_btn, suggest)):
+            btn.state(["!disabled"] if on else ["disabled"])
+
+    def _append_answer(self, text):
+        self.answer.config(state="normal")
+        self.answer.insert("end", text)
+        self.answer.see("end")
+        self.answer.config(state="disabled")
 
     def _in_background(self, work):
         def run():
@@ -147,11 +159,17 @@ class App:
             elif kind == "question":
                 self.question.delete("1.0", "end")
                 self.question.insert("1.0", value)
-                self.status.config(text="Done." if value else "Didn't catch any speech. Try again.")
-                self._set_buttons(start=True, stop=False)
+                self.status.config(text="Ready. Press Suggest Answer." if value
+                                   else "Didn't catch any speech. Try again.")
+                self._set_buttons(start=True, stop=False, suggest=True)
+            elif kind == "token":
+                self._append_answer(value)
+            elif kind == "done":
+                self.status.config(text="Done.")
+                self._set_buttons(start=True, stop=False, suggest=True)
             elif kind == "error":
                 self.status.config(text=f"Error: {value}")
-                self._set_buttons(start=True, stop=False)
+                self._set_buttons(start=True, stop=False, suggest=True)
         self.root.after(50, self._drain_events)
 
     def start(self):
@@ -160,14 +178,32 @@ class App:
         except Exception as e:
             self.status.config(text=f"Microphone error: {e}")
             return
-        self._set_buttons(start=False, stop=True)
+        self._set_buttons(start=False, stop=True, suggest=False)
         self.status.config(text="Listening...")
 
     def stop(self):
         audio = self.recorder.stop()
-        self._set_buttons(start=False, stop=False)
+        self._set_buttons(start=False, stop=False, suggest=False)
         self.status.config(text="Transcribing...")
         self._in_background(lambda: self.events.put(("question", transcribe(audio))))
+
+    def suggest(self):
+        question = self.question.get("1.0", "end").strip()
+        if not question:
+            self.status.config(text="Nothing to answer yet. Record or type a question.")
+            return
+        self.answer.config(state="normal")
+        self.answer.delete("1.0", "end")
+        self.answer.config(state="disabled")
+        self._set_buttons(start=False, stop=False, suggest=False)
+        self.status.config(text="Thinking...")
+
+        def work():
+            for piece in stream_answer(question):
+                self.events.put(("token", piece))
+            self.events.put(("done", None))
+
+        self._in_background(work)
 
 
 def main():
