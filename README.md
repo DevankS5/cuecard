@@ -57,9 +57,23 @@ Requires Python 3.10+ and a microphone.
 
 The status line says "Loading models..." for a few seconds after launch, then "Ready".
 
-Measured on a laptop with an RTX 4050 (6 GB): models ready about 12 s after launch, first
-words of the answer after about 2.5 s, a full 5-sentence answer in about 4.5 s. The very first
-run after installing Ollama is slower while it sets up the GPU runtime.
+Measured on a laptop with an RTX 4050 (6 GB VRAM, 16 CPU threads), Windows 11, Ollama 0.40.15,
+`llama3.2:3b` (Q4_K_M), median of 5 runs on the same 5.5 s spoken question:
+
+| Stage | Time |
+|---|---|
+| Models ready after launch (cold) | ~10.6 s |
+| Transcription of a 5.5 s question (Whisper small, CPU, 8 threads) | ~3.0 s |
+| First words of the answer | ~0.4 s |
+| Full 5-sentence answer | ~1.7 s |
+| Generation speed | ~70-78 tokens/s |
+
+The very first run after installing Ollama is slower (about a minute) while it sets up the GPU
+runtime.
+
+Two defaults matter on Windows: Cuecard talks to `127.0.0.1` rather than `localhost`, because
+`localhost` tries IPv6 first and costs about 2 s per request when Ollama only listens on IPv4,
+and it gives Whisper half the logical cores instead of pywhispercpp's default of 4 threads.
 
 ## Configuration
 
@@ -69,7 +83,7 @@ Optional environment variables:
 |---|---|---|
 | `CUECARD_WHISPER_MODEL` | Handy's `ggml-small.bin`, else `base.en` | Path to a whisper.cpp model, or a model name such as `small.en` |
 | `CUECARD_LLM` | `llama3.2:3b` | Any model you have pulled in Ollama |
-| `CUECARD_OLLAMA_URL` | `http://localhost:11434` | Where the Ollama server listens |
+| `CUECARD_OLLAMA_URL` | `http://127.0.0.1:11434` | Where the Ollama server listens |
 
 ## Tests
 

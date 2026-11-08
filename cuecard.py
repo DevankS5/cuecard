@@ -19,7 +19,9 @@ HANDY_MODEL = os.path.join(os.environ.get("APPDATA", ""), "com.pais.handy", "mod
 WHISPER_MODEL = os.environ.get("CUECARD_WHISPER_MODEL") or (
     HANDY_MODEL if os.path.exists(HANDY_MODEL) else "base.en"
 )
-OLLAMA_URL = os.environ.get("CUECARD_OLLAMA_URL", "http://localhost:11434")
+# 127.0.0.1, not localhost: on Windows "localhost" tries IPv6 ::1 first, Ollama only listens on
+# IPv4, and the failed attempt adds about 2 s to every request.
+OLLAMA_URL = os.environ.get("CUECARD_OLLAMA_URL", "http://127.0.0.1:11434")
 LLM_MODEL = os.environ.get("CUECARD_LLM", "llama3.2:3b")
 SYSTEM_PROMPT = (
     "You help a candidate in a live interview. You get a rough speech transcript of the "
@@ -66,7 +68,11 @@ def transcribe(audio):
         if _whisper is None:
             from pywhispercpp.model import Model
 
-            _whisper = Model(WHISPER_MODEL, print_progress=False, print_realtime=False)
+            # pywhispercpp defaults to 4 threads. Half the logical cores (~ the physical cores)
+            # nearly halves transcription on a 16-thread laptop: 5.2 s -> 2.8 s for a 5.5 s clip.
+            threads = max(4, (os.cpu_count() or 8) // 2)
+            _whisper = Model(WHISPER_MODEL, n_threads=threads,
+                             print_progress=False, print_realtime=False)
         segments = _whisper.transcribe(audio)
     text = " ".join(seg.text.strip() for seg in segments).strip()
     return "" if text == "[BLANK_AUDIO]" else text
