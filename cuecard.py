@@ -68,7 +68,11 @@ def transcribe(audio):
         if _whisper is None:
             from pywhispercpp.model import Model
 
-            _whisper = Model(WHISPER_MODEL, print_progress=False, print_realtime=False)
+            # pywhispercpp defaults to 4 threads. Half the logical cores (~ the physical cores)
+            # nearly halves transcription on a 16-thread laptop: 5.2 s -> 2.8 s for a 5.5 s clip.
+            threads = max(4, (os.cpu_count() or 8) // 2)
+            _whisper = Model(WHISPER_MODEL, n_threads=threads,
+                             print_progress=False, print_realtime=False)
         segments = _whisper.transcribe(audio)
     text = " ".join(seg.text.strip() for seg in segments).strip()
     return "" if text == "[BLANK_AUDIO]" else text
