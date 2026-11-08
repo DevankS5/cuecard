@@ -69,7 +69,7 @@ Optional environment variables:
 |---|---|---|
 | `CUECARD_WHISPER_MODEL` | Handy's `ggml-small.bin`, else `base.en` | Path to a whisper.cpp model, or a model name such as `small.en` |
 | `CUECARD_LLM` | `llama3.2:3b` | Any model you have pulled in Ollama |
-| `CUECARD_OLLAMA_URL` | `http://localhost:11434` | Where the Ollama server listens |
+| `CUECARD_OLLAMA_URL` | `http://127.0.0.1:11434` | Where the Ollama server listens |
 
 ## Tests
 

@@ -19,7 +19,9 @@ HANDY_MODEL = os.path.join(os.environ.get("APPDATA", ""), "com.pais.handy", "mod
 WHISPER_MODEL = os.environ.get("CUECARD_WHISPER_MODEL") or (
     HANDY_MODEL if os.path.exists(HANDY_MODEL) else "base.en"
 )
-OLLAMA_URL = os.environ.get("CUECARD_OLLAMA_URL", "http://localhost:11434")
+# 127.0.0.1, not localhost: on Windows "localhost" tries IPv6 ::1 first, Ollama only listens on
+# IPv4, and the failed attempt adds about 2 s to every request.
+OLLAMA_URL = os.environ.get("CUECARD_OLLAMA_URL", "http://127.0.0.1:11434")
 LLM_MODEL = os.environ.get("CUECARD_LLM", "llama3.2:3b")
 SYSTEM_PROMPT = (
     "You help a candidate in a live interview. You get a rough speech transcript of the "
